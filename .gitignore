@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.onnx
+.ruff_cache/
+uploads/
+.python-version
+.env
+.vscode/
+
+*/node_modules

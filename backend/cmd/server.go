@@ -1,0 +1,17 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+)
+
+func (app *application) serve() error {
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", app.port),
+		Handler: app.routes(),
+	}
+	log.Printf("Starting server on port %d", app.port)
+
+	return server.ListenAndServe()
+}

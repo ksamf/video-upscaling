@@ -1,53 +1,34 @@
-# Базовый образ с поддержкой CUDA и cuDNN
-FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04
+# Builder stage
+FROM golang:1.25.1-alpine3.22 AS builder
 
-# Установим переменные окружения для uv
-ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy
+WORKDIR /app
 
-# Объединяем установку зависимостей в одну RUN-команду
-RUN apt-get update -qy && \
-    apt-get install -qy --no-install-recommends \
-    ffmpeg \
-    python3 \
-    python3-pip \
-    python3-dev \
-    build-essential \
-    git \
-    curl \
-    ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+# нужно git для go install
+RUN apk add --no-cache git
 
-# Скачиваем и устанавливаем uv
-ADD https://astral.sh/uv/install.sh /uv-installer.sh
-RUN sh /uv-installer.sh && rm /uv-installer.sh
+COPY go.mod go.sum ./
+RUN go mod download
 
-# Обновляем PATH, чтобы включить uv, CUDA и виртуальное окружение (если нужно)
-ENV PATH="/root/.local/bin:/usr/local/cuda/bin:/app/.venv/bin:${PATH}"
+# Установим инструменты
+RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 
-# Синхронизируем зависимости uv
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --no-dev
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o backend ./cmd
+FROM alpine:3.22
 
-# Устанавливаем рабочую директорию
-WORKDIR /backend
+WORKDIR /app
 
-# Копируем весь проект
-COPY . /backend/
+# добавим bash и зависимости (по желанию)
+RUN apk add --no-cache bash ca-certificates ffmpeg
 
-# Повторная синхронизация после копирования исходного кода (при необходимости)
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
-
-# Даем права на выполнение entrypoint-скрипта
-RUN chmod +x /backend/entrypoint.sh
-
-# Настройка переменных для CUDA (если требуются)
-ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/cuda/lib64
+# Копируем бинарь, air и migrate
+COPY --from=builder /app/backend .
+COPY ./migrations ./migrations
+COPY --from=builder /go/bin/migrate /usr/local/bin/migrate
 
 EXPOSE 8000
 
-# Запускаем приложение
-CMD ["./entrypoint.sh"]
+# Здесь можно выбрать запуск:
+# 1. Если нужно прогонять миграции при старте:
+CMD ["sh", "-c", "migrate -path migrations -database postgres://$DB_USER:$DB_PASS@$DB_HOST:$DB_PORT/$DB_NAME?sslmode=disable up && ./backend"]
+

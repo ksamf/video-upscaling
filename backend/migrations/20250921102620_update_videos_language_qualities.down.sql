@@ -1,0 +1,3 @@
+ALTER TABLE videos
+ALTER COLUMN language TEXT
+ALTER COLUMN qualities INT[];

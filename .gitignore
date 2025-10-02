@@ -1,10 +1,11 @@
+tmp/
 .venv/
 __pycache__/
-*.onnx
 .ruff_cache/
 uploads/
 .python-version
 .env
 .vscode/
+tst/
 
 */node_modules

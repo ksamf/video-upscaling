@@ -95,9 +95,9 @@ func Handler(file io.Reader, fileName uuid.UUID, db database.VideoModel) error {
 		}
 	}
 
-	// http.Get(fmt.Sprintf("http://localhost:8000/api/upscale?id=%s&file=%s&real=false", fileName.String(), strconv.Itoa(height)+".mp4"))
 	wg.Wait()
-
+	// go http.Get(fmt.Sprintf("http://localhost:8080/api/upscale?id=%s&file=%s&real=false", fileName.String(), strconv.Itoa(height)+".mp4"))
+	// go http.Get("http://localhost:8080/api/subtitles?id=" + fileName.String())
 	return nil
 }
 
@@ -184,6 +184,5 @@ func extractAudio(inputPath, fileName string, s3 *aws.S3Storage, wg *sync.WaitGr
 	if err := cmd.Wait(); err != nil {
 		log.Printf("extractAudio wait failed: %v", err)
 	}
-	// http.Get("http:// video_processor:8080/api/subtitles?id=" + fileName)
 
 }

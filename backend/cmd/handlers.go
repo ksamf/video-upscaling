@@ -36,11 +36,6 @@ func (app *application) uploadVideo(c *gin.Context) {
 	fileName := uuid.New()
 
 	savePathS3 := "https://" + conf.S3.EndpointURL + "/" + conf.S3.BucketName + "/" + fileName.String()
-
-	if err = utils.Handler(file, fileName, app.models.Videos); err != nil {
-		c.String(http.StatusInternalServerError, "Failed transcode video: %v", err)
-	}
-
 	err = app.models.Videos.Insert(&database.Video{
 		VideoId:   fileName,
 		Name:      strings.TrimSuffix(header.Filename, ext),
@@ -48,6 +43,10 @@ func (app *application) uploadVideo(c *gin.Context) {
 	})
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Ошибка сохранения файла: %v", err)
+	}
+
+	if err = utils.Handler(file, fileName, app.models.Videos); err != nil {
+		c.String(http.StatusInternalServerError, "Failed transcode video: %v", err)
 	}
 
 	c.String(http.StatusOK, fmt.Sprintf("Видео успешно загружено: %s", savePathS3))

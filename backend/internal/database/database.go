@@ -92,7 +92,7 @@ func (m *VideoModel) UpdatePartial(id uuid.UUID, field string, value any) error 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	query := fmt.Sprintf("UPDATE videos SET %s = $1 WHERE video_id = $2", field)
+	query := fmt.Sprintf(`UPDATE videos SET "%s" = $1 WHERE video_id = $2`, field)
 	res, err := m.Pool.Exec(ctx, query, value, id)
 	if err != nil {
 		return err
@@ -117,7 +117,7 @@ func (m *VideoModel) UpdateQualities(id uuid.UUID, value []int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	query := "SELECT quality_id FROM qualities WHERE qualities = $1"
+	query := "SELECT quality_id FROM qualities WHERE qualities = $1::int[]"
 	row := m.Pool.QueryRow(ctx, query, pq.Array(value))
 
 	var r int
@@ -128,8 +128,6 @@ func (m *VideoModel) UpdateQualities(id uuid.UUID, value []int) error {
 		}
 		return fmt.Errorf("query failed: %w", err)
 	}
-
-	fmt.Println("quality_id:", r)
 
 	if err := m.UpdatePartial(id, "quality_id", r); err != nil {
 		return fmt.Errorf("update failed: %w", err)

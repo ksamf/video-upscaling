@@ -39,5 +39,5 @@ async def create_sub(id: UUID):
         await audio_processor.transcribe_video(tmpdir)
 
 
-# if __name__ == "__main__":
-#     uvicorn.run("main:app", host="0.0.0.0", port=8080)
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8080)

@@ -1394,7 +1394,7 @@ wheels = [
 
 [[package]]
 name = "onnxruntime-gpu"
-version = "1.21.0"
+version = "1.23.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "coloredlogs" },
@@ -1405,8 +1405,8 @@ dependencies = [
     { name = "sympy" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ca/c1/4e469d129ad950fa9f2580347552128a72b2263443f365e3b5a036069afa/onnxruntime_gpu-1.21.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3008c9bcd89060db5e9a9985eb940e456c41bb36493ac171c794b587ea4585ed", size = 280811594, upload-time = "2025-03-07T23:44:02.744Z" },
-    { url = "https://files.pythonhosted.org/packages/39/fe/095e36b84acd7573de180cece6e5b45fc7403a8f4a015501fbc249769957/onnxruntime_gpu-1.21.0-cp312-cp312-win_amd64.whl", hash = "sha256:cfa269be3f5b321d5923a2d3eca3487efdd30dfce95122fe25fea879009f35ea", size = 213081231, upload-time = "2025-03-07T23:37:45.545Z" },
+    { url = "https://files.pythonhosted.org/packages/9d/96/e42de1a3a1cb6cb76bb5e98221c59fb8d954ca6929a6aff681d87c9fdca6/onnxruntime_gpu-1.23.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:95801445d4ba4f4420587e66d6ccf28294a9cdc30f542da8425df68ac7101f62", size = 300459379, upload-time = "2025-09-25T18:33:51.181Z" },
+    { url = "https://files.pythonhosted.org/packages/e8/34/1eb9b6ea10045fe20fb2835dcab42472537c9bdbfb390f8a8addaf20a553/onnxruntime_gpu-1.23.0-cp312-cp312-win_amd64.whl", hash = "sha256:17575b3f7b9f4d1867e3fbe6f751669cebfd369b47425ff7fa8813587a5e8c28", size = 285364792, upload-time = "2025-09-25T18:35:29.703Z" },
 ]
 
 [[package]]
@@ -2608,12 +2608,12 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.118.0" },
     { name = "nvidia-cublas-cu11", specifier = ">=11.11.3.6" },
     { name = "nvidia-cudnn-cu11", specifier = ">=9.10.2.21" },
-    { name = "onnxruntime-gpu", specifier = "==1.21.0" },
+    { name = "onnxruntime-gpu", specifier = ">=1.23.0" },
     { name = "opencv-python", specifier = ">=4.12.0.88" },
     { name = "pydantic-settings", specifier = ">=2.10.1" },
-    { name = "torch", index = "https://download.pytorch.org/whl/cu128" },
-    { name = "torchaudio", index = "https://download.pytorch.org/whl/cu128" },
-    { name = "torchvision", index = "https://download.pytorch.org/whl/cu128" },
+    { name = "torch", specifier = ">=2.8.0", index = "https://download.pytorch.org/whl/cu128" },
+    { name = "torchaudio", specifier = ">=2.8.0", index = "https://download.pytorch.org/whl/cu128" },
+    { name = "torchvision", specifier = ">=0.23.0", index = "https://download.pytorch.org/whl/cu128" },
     { name = "uvicorn", specifier = ">=0.37.0" },
     { name = "webvtt-py", specifier = ">=0.5.1" },
     { name = "whisperx", specifier = ">=3.4.2" },

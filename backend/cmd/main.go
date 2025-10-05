@@ -34,7 +34,7 @@ func main() {
 	defer pool.Close()
 	models := database.NewModel(pool)
 	app := &application{
-		port:   8080,
+		port:   8000,
 		models: models,
 	}
 	if err := app.serve(); err != nil {

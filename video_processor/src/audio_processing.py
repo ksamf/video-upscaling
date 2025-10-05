@@ -14,8 +14,6 @@ import src.db as db
 import asyncio
 from src.s3_storage import s3_client
 
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.allow_tf32 = True
 
 logger = logging.getLogger(__name__)
 

@@ -8,6 +8,7 @@ import (
 	_ "github.com/lib/pq"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/ksamf/video-upscaling/backend/internal/aws"
 	"github.com/ksamf/video-upscaling/backend/internal/config"
 	"github.com/ksamf/video-upscaling/backend/internal/database"
 )
@@ -15,11 +16,14 @@ import (
 type application struct {
 	port   int
 	models database.Models
+	config *config.Config
+	s3     *aws.S3Storage
 }
 
 func main() {
 
 	conf := config.New()
+	s3 := aws.New()
 	url := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
 		conf.Postgres.User,
 		conf.Postgres.Pass,
@@ -36,6 +40,8 @@ func main() {
 	app := &application{
 		port:   8000,
 		models: models,
+		config: conf,
+		s3:     s3,
 	}
 	if err := app.serve(); err != nil {
 		panic(err)

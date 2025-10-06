@@ -38,7 +38,6 @@ func New() *S3Storage {
 
 	err = minioClient.MakeBucket(context.Background(), storage.BucketName, minio.MakeBucketOptions{})
 	if err != nil {
-		// Check to see if we already own this bucket (which happens if you run this twice)
 		exists, errBucketExists := minioClient.BucketExists(context.Background(), storage.BucketName)
 		if errBucketExists == nil && exists {
 			log.Printf("We already own %s\n", storage.BucketName)
@@ -52,14 +51,8 @@ func New() *S3Storage {
 }
 func (s3 *S3Storage) PutObject(object string, reader io.Reader) error {
 
-	// Upload the test file
-	// Change the value of filePath if the file is in another location
-	// objectName := "testdata"
-	// filePath := "/tmp/testdata"
 	contentType := "application/octet-stream"
-
-	// Upload the test file with FPutObject
-	info, err := s3.Client.PutObject(context.TODO(), s3.BucketName, object, reader, -1, minio.PutObjectOptions{ContentType: contentType})
+	info, err := s3.Client.PutObject(context.Background(), s3.BucketName, object, reader, -1, minio.PutObjectOptions{ContentType: contentType})
 	if err != nil {
 		return err
 	}
@@ -80,10 +73,10 @@ func (s3 *S3Storage) GetObject(object string) (io.ReadCloser, error) {
 	return obj, nil
 }
 
-func (s3 *S3Storage) DeleteObject(object string) {
+func (s3 *S3Storage) DeleteObject(object string) error {
 	err := s3.Client.RemoveObject(context.Background(), s3.BucketName, object, minio.RemoveObjectOptions{})
 	if err != nil {
-		log.Fatalln(err)
+		return err
 	}
-	log.Printf("Successfully deleted %s\n", object)
+	return nil
 }

@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
-	"strings"
-
-	"github.com/ksamf/video-upscaling/backend/internal/config"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -15,7 +12,7 @@ import (
 )
 
 func (app *application) uploadVideo(c *gin.Context) {
-	conf := config.New()
+	realisticVideo := c.DefaultQuery("realistic", "true")
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		c.String(http.StatusBadRequest, "Error get file: %v", err)
@@ -33,23 +30,12 @@ func (app *application) uploadVideo(c *gin.Context) {
 		c.String(http.StatusBadRequest, "Недопустимый формат файла")
 		return
 	}
-	fileName := uuid.New()
 
-	savePathS3 := "https://" + conf.S3.EndpointURL + "/" + conf.S3.BucketName + "/" + fileName.String()
-	err = app.models.Videos.Insert(&database.Video{
-		VideoId:   fileName,
-		Name:      strings.TrimSuffix(header.Filename, ext),
-		VideoPath: savePathS3,
-	})
-	if err != nil {
-		c.String(http.StatusInternalServerError, "Ошибка сохранения файла: %v", err)
-	}
-
-	if err = utils.Handler(file, fileName, app.models.Videos); err != nil {
+	if err = utils.VideoProcessor(file, header.Filename, realisticVideo, app.models.Videos, app.s3); err != nil {
 		c.String(http.StatusInternalServerError, "Failed transcode video: %v", err)
 	}
 
-	c.String(http.StatusOK, fmt.Sprintf("Видео успешно загружено: %s", savePathS3))
+	c.String(http.StatusOK, fmt.Sprint("Видео успешно загружено"))
 }
 
 func (app *application) getVideo(c *gin.Context) {
@@ -57,7 +43,7 @@ func (app *application) getVideo(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid video ID"})
 	}
-	video, err := app.models.Videos.Get(id)
+	video, err := app.models.Videos.GetByID(id)
 	if video == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Video not found"})
 		return
@@ -69,9 +55,10 @@ func (app *application) getVideo(c *gin.Context) {
 }
 
 func (app *application) getAllVideos(c *gin.Context) {
-	videos, err := app.models.Videos.GetAll()
+	limit := c.DefaultQuery("limit", "10")
+	offset := c.DefaultQuery("offset", "0")
+	videos, err := app.models.Videos.GetAll(limit, offset)
 	if err != nil {
-		fmt.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get videos"})
 		return
 	}
@@ -85,7 +72,12 @@ func (app *application) deleteVideo(c *gin.Context) {
 	}
 	err = app.models.Videos.Delete(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete video"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete video from database"})
+		return
+	}
+	err = app.s3.DeleteObject(id.String())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete video from S3"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Video deleted successfully"})
@@ -102,7 +94,6 @@ func (app *application) updateVideoPartial(c *gin.Context) {
 		return
 	}
 	updateVideo.VideoId = id
-	fmt.Println(updateVideo)
 	// if updateVideo.LanguageId != 0 {
 	// 	err = app.models.Videos.UpdatePartial(id, "language", updateVideo.LanguageId)
 	// }
@@ -119,23 +110,6 @@ func (app *application) updateVideoPartial(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Video updated successfully"})
 }
 
-// func (app *application) getVideoInfo(c *gin.Context) {
-// 	id, err := strconv.Atoi(c.Param("id"))
-// 	if err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid video ID"})
-// 		return
-// 	}
-// 	info, err := app.models.Videos.GetInfo(id)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get video info"})
-// 		return
-// 	}
-// 	if info == nil {
-// 		c.JSON(http.StatusNotFound, gin.H{"error": "Video info not found"})
-// 		return
-// 	}
-// 	c.JSON(http.StatusOK, info)
-// }
 // func (app *application) getVideoSubtitles(c *gin.Context) {
 // 	id, err := strconv.Atoi(c.Param("id"))
 // 	if err != nil {
@@ -153,6 +127,7 @@ func (app *application) updateVideoPartial(c *gin.Context) {
 // 	}
 // 	c.JSON(http.StatusOK, subtitles)
 // }
+
 // func (app *application) getVideoDubbing(c *gin.Context) {
 // 	id, err := strconv.Atoi(c.Param("id"))
 // 	if err != nil {

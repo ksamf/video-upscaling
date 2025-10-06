@@ -24,6 +24,13 @@ type Video struct {
 	LanguageId int       `json:"language_id"`
 	QualityId  int       `json:"quality_id"`
 }
+type FullVideo struct {
+	VideoId   uuid.UUID `json:"video_id"`
+	Name      string    `json:"name"`
+	VideoPath string    `json:"video_path"`
+	Language  string    `json:"language"`
+	Qualities []int     `json:"qualities"`
+}
 
 func (m *VideoModel) Insert(video *Video) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
@@ -38,11 +45,11 @@ func (m *VideoModel) Insert(video *Video) error {
 	return nil
 }
 
-func (m *VideoModel) GetAll() ([]*Video, error) {
+func (m *VideoModel) GetAll(limit, offset string) ([]*Video, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	defer cancel()
-	query := "SELECT * FROM videos"
-	rows, err := m.Pool.Query(ctx, query)
+	query := "SELECT * FROM videos LIMIT $1 OFFSET $2"
+	rows, err := m.Pool.Query(ctx, query, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -63,13 +70,25 @@ func (m *VideoModel) GetAll() ([]*Video, error) {
 	return videos, nil
 }
 
-func (m *VideoModel) Get(id uuid.UUID) (*Video, error) {
+func (m *VideoModel) GetByID(id uuid.UUID) (*FullVideo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	defer cancel()
-	query := "SELECT video_id, name, language_id, quality_id, video_path FROM videos WHERE video_id = $1"
+	query := `SELECT 
+    			v.video_id,
+    			v.name,
+    			v.video_path,
+    			COALESCE(l.language, '') AS language,
+    			COALESCE(q.qualities, '{}') AS qualities
+			FROM videos AS v
+			LEFT JOIN languages AS l 
+			    ON l.language_id = v.language_id OR (v.language_id IS NULL AND l.language_id IS NULL)
+			LEFT JOIN qualities AS q 
+			    ON q.quality_id = v.quality_id OR (v.quality_id IS NULL AND q.quality_id IS NULL)
+			WHERE v.video_id = $1;
+			`
 	row := m.Pool.QueryRow(ctx, query, id)
-	var v Video
-	err := row.Scan(&v.VideoId, &v.Name, &v.LanguageId, &v.QualityId, &v.VideoPath)
+	var v FullVideo
+	err := row.Scan(&v.VideoId, &v.Name, &v.VideoPath, &v.Language, &v.Qualities)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -117,7 +136,7 @@ func (m *VideoModel) UpdateQualities(id uuid.UUID, value []int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	query := "SELECT quality_id FROM qualities WHERE qualities = $1::int[]"
+	query := "SELECT quality_id FROM qualities WHERE qualities @> $1::int[]"
 	row := m.Pool.QueryRow(ctx, query, pq.Array(value))
 
 	var r int

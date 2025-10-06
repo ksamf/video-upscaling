@@ -22,12 +22,12 @@ app.add_middleware(
 async def upscale(
     id: UUID,
     file: str,
-    real: bool = True,
+    realistic: bool = True,
 ):
     with tempfile.TemporaryDirectory() as tmpdir:
         video_processor = VideoProcessor(
             upload_id=id,
-            realistic_video=real,
+            realistic_video=realistic,
         )
         await video_processor.upscale_video(id, file, tmpdir)
 

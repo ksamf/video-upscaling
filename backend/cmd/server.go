@@ -8,7 +8,7 @@ import (
 
 func (app *application) serve() error {
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", app.port),
+		Addr:    fmt.Sprintf("%s:%d", app.host, app.port),
 		Handler: app.routes(),
 	}
 	log.Printf("Starting server on port %d", app.port)

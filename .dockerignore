@@ -1,23 +1,8 @@
-tmp/
-.air.toml
-Makefile
-.venv/
-env/
-__pycache__/
-
-*.log
-*.tmp
-*.swp
-.ruff_cache/
-
 .vscode/
 .idea/
 
-dist/
-build/
-*.egg-info/
-
 .env
-*.env
+.env.temp
 
-node_modules/
+.gitignore
+.gitattributes

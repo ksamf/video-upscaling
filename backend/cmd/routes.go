@@ -13,7 +13,8 @@ func (app *application) routes() http.Handler {
 	router.GET("/video/:id", app.getVideo)
 	router.PATCH("/video/:id", app.updateVideoPartial)
 	router.DELETE("/video/:id", app.deleteVideo)
-	// router.GET("/video/:id/subtitles", app.getVideoSubtitles)
+	router.GET("/video/:id/sub", app.getVideoSubtitles)
+	// router.GET("/video/:id/dub", app.getVideoDubbing)
 	return router
 
 }

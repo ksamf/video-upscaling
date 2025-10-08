@@ -54,7 +54,7 @@ func (s3 *S3Storage) PutObject(object string, reader io.Reader) error {
 	contentType := "application/octet-stream"
 	info, err := s3.Client.PutObject(context.Background(), s3.BucketName, object, reader, -1, minio.PutObjectOptions{ContentType: contentType})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to put object %s: %w", object, err)
 	}
 	log.Printf("Successfully uploaded %s of size %d\n", object, info.Size)
 	return nil
@@ -76,7 +76,19 @@ func (s3 *S3Storage) GetObject(object string) (io.ReadCloser, error) {
 func (s3 *S3Storage) DeleteObject(object string) error {
 	err := s3.Client.RemoveObject(context.Background(), s3.BucketName, object, minio.RemoveObjectOptions{})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to delete object %s: %w", object, err)
 	}
 	return nil
+}
+
+func (s3 *S3Storage) ExitsObjects(object string) bool {
+	_, err := s3.Client.StatObject(context.Background(), s3.BucketName, object, minio.StatObjectOptions{})
+	if err != nil {
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			return false
+		} else {
+			return false
+		}
+	}
+	return true
 }

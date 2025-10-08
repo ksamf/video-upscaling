@@ -3,10 +3,13 @@ package config
 import (
 	"os"
 	"strconv"
-
-	"github.com/joho/godotenv"
 )
 
+type AppConfig struct {
+	Host  string
+	Port  int
+	Debug bool
+}
 type PgConfig struct {
 	Host string
 	Port int
@@ -20,16 +23,27 @@ type S3Config struct {
 	EndpointURL     string
 	BucketName      string
 }
+
+type ApiConfig struct {
+	BaseURL string
+}
 type Config struct {
+	App      AppConfig
 	Postgres PgConfig
 	S3       S3Config
+	Api      ApiConfig
 }
 
 func New() *Config {
-	if err := godotenv.Load(".env"); err != nil {
-		panic(err)
-	}
+	// if err := godotenv.Load(".env"); err != nil {
+	// 	panic(err)
+	// }
 	return &Config{
+		App: AppConfig{
+			Host:  getEnv("APP_HOST", "localhost"),
+			Port:  getEnvAsInt("APP_PORT", 8000),
+			Debug: getEnv("APP_DEBUG", "false") == "true",
+		},
 		Postgres: PgConfig{
 			Host: getEnv("DB_HOST", ""),
 			Port: getEnvAsInt("DB_PORT", 5432),
@@ -42,6 +56,9 @@ func New() *Config {
 			SecretAccessKey: getEnv("S3_SECRET_ACCESS_KEY", ""),
 			EndpointURL:     getEnv("S3_ENDPOINT_URL", ""),
 			BucketName:      getEnv("S3_BUCKET_NAME", ""),
+		},
+		Api: ApiConfig{
+			BaseURL: getEnv("BASE_URL", ""),
 		},
 	}
 }

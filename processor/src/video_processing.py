@@ -12,6 +12,7 @@ import numpy as np
 import torch
 import onnxruntime as ort
 from src.s3_storage import s3_client
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +47,13 @@ QUALITIES = {
 class VideoProcessor:
     _ort_session: Optional[ort.InferenceSession] = None
 
-    def __init__(self, upload_id: UUID, realistic_video: bool) -> None:
+    def __init__(self, upload_id: UUID, realistic: bool) -> None:
         """Initialize ONNX session and model path"""
         self.upload_id = upload_id
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.upscale_factor = 2
         self.upscale_model = Path(
-            "models/3Dx2.onnx" if realistic_video else "models/2Dx2.onnx"
+            settings.UPSCALE_3D_PATH if realistic else settings.UPSCALE_2D_PATH
         )
         if VideoProcessor._ort_session is None:
             options = ort.SessionOptions()
@@ -259,7 +260,7 @@ class VideoProcessor:
         """Download, upscale, merge audio and upload result"""
         start = time.time()
         input_video = Path(tmpdir) / "original.mp4"
-        await s3_client.get_file(str(id) + "/" + file_name, input_video)
+        await s3_client.get_file(str(id) + "/" + file_name + ".mp4", input_video)
 
         cap = cv2.VideoCapture(input_video, cv2.CAP_FFMPEG)
         if not cap.isOpened():

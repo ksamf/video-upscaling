@@ -7,5 +7,5 @@ uploads/
 .env
 .vscode/
 tst/
-
-*/node_modules
+transcribe/
+translate/

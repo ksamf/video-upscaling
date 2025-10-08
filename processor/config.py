@@ -2,6 +2,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    APP_HOST: str
+    APP_PORT: int
+    APP_DEBUG: bool
+
     DB_HOST: str
     DB_PORT: str
     DB_USER: str
@@ -12,6 +16,11 @@ class Settings(BaseSettings):
     S3_SECRET_ACCESS_KEY: str
     S3_ENDPOINT_URL: str
     S3_BUCKET_NAME: str
+
+    UPSCALE_3D_PATH: str
+    UPSCALE_2D_PATH: str
+    TRANSCRIBE_PATH: str
+    TRANSLATE_PATH: str
 
     @property
     def DB_URL(self):

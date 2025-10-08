@@ -154,3 +154,22 @@ func (m *VideoModel) UpdateQualities(id uuid.UUID, value []int) error {
 
 	return nil
 }
+
+func (m *VideoModel) GetLanguage(id uuid.UUID) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+	query := `SELECT l.language 
+				FROM languages AS l
+				JOIN videos AS v ON v.language_id = l.language_id 
+				WHERE v.video_id = $1;`
+	row := m.Pool.QueryRow(ctx, query, id)
+	var language string
+
+	err := row.Scan(&language)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", nil
+		}
+	}
+	return language, err
+}

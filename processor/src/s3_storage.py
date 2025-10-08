@@ -33,11 +33,11 @@ class S3Client:
         file_path: str,
     ):
         """
-        Загружает один файл в S3-хранилище.
+        Uploads a file to the specified S3 bucket and folder.
 
         Args:
-            folder_name (str): Папка в S3, куда будет сохранён файл.
-            file_path (str): Локальный путь к файлу.
+            folder_name (str): Folder in the S3 bucket where the file will be uploaded.
+            file_path (str): Path to the local file to be uploaded.
         """
         try:
             async with self.get_client() as client:
@@ -52,6 +52,12 @@ class S3Client:
             print(f"Error uploading file: {e}")
 
     async def get_file(self, object_name, destination_path):
+        """
+        Downloads a file from the specified S3 bucket.
+        Args:
+            object_name (str): The name of the object to download from S3.
+            destination_path (str): The local path where the file will be saved.
+        """
         async with self.get_client() as client:
             response = await client.get_object(Bucket=self.bucket_name, Key=object_name)
             data = await response["Body"].read()
@@ -60,6 +66,13 @@ class S3Client:
             print(f"File {object_name} downloaded to {destination_path}")
 
     async def file_exists(self, key: str) -> bool:
+        """
+        Checks if a file exists in the specified S3 bucket.
+        Args:
+            key (str): The key of the object to check in S3.
+        Returns:
+            bool: True if the file exists, False otherwise.
+        """
         async with self.get_client() as client:
             try:
                 await client.head_object(Bucket=self.bucket_name, Key=key)

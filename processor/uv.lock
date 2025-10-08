@@ -147,22 +147,6 @@ wheels = [
 ]
 
 [[package]]
-name = "argostranslate"
-version = "1.9.6"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "ctranslate2" },
-    { name = "packaging" },
-    { name = "sacremoses" },
-    { name = "sentencepiece" },
-    { name = "stanza" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/6b/fc/13aa57857bee34f62cb9018c5fd4ec56da714431689b62cca9dce30a8877/argostranslate-1.9.6.tar.gz", hash = "sha256:dd8cc1327aa67132299f950e160dd20d314b8cf484f540f0d22f1f07c2d8876b", size = 32855, upload-time = "2024-04-30T21:32:44.15Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/01/f9/b472322ea3de4752bbec7fb2f169f057872390a9ff35f72a2142d06392ae/argostranslate-1.9.6-py3-none-any.whl", hash = "sha256:285b194bd64d65617ee2fa8969a40ce790c6b3acf875f94f1d2b0373f3ae691c", size = 34360, upload-time = "2024-04-30T21:32:41.723Z" },
-]
-
-[[package]]
 name = "asteroid-filterbanks"
 version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1526,6 +1510,63 @@ wheels = [
 ]
 
 [[package]]
+name = "processor"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "aiobotocore" },
+    { name = "asyncpg" },
+    { name = "coqui-tts" },
+    { name = "fastapi" },
+    { name = "nvidia-cublas-cu11" },
+    { name = "nvidia-cudnn-cu11" },
+    { name = "onnxruntime-gpu" },
+    { name = "opencv-python" },
+    { name = "pydantic-settings" },
+    { name = "sacremoses" },
+    { name = "sentencepiece" },
+    { name = "torch" },
+    { name = "torchaudio" },
+    { name = "torchvision" },
+    { name = "tqdm" },
+    { name = "transformers" },
+    { name = "uvicorn" },
+    { name = "webvtt-py" },
+    { name = "whisperx" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiobotocore", specifier = ">=2.24.2" },
+    { name = "asyncpg", specifier = ">=0.30.0" },
+    { name = "coqui-tts", specifier = ">=0.27.1" },
+    { name = "fastapi", specifier = ">=0.118.0" },
+    { name = "nvidia-cublas-cu11", specifier = ">=11.11.3.6" },
+    { name = "nvidia-cudnn-cu11", specifier = ">=9.10.2.21" },
+    { name = "onnxruntime-gpu", specifier = ">=1.23.0" },
+    { name = "opencv-python", specifier = ">=4.12.0.88" },
+    { name = "pydantic-settings", specifier = ">=2.10.1" },
+    { name = "sacremoses", specifier = ">=0.1.1" },
+    { name = "sentencepiece", specifier = ">=0.2.0" },
+    { name = "torch", specifier = ">=2.8.0", index = "https://download.pytorch.org/whl/cu128" },
+    { name = "torchaudio", specifier = ">=2.8.0", index = "https://download.pytorch.org/whl/cu128" },
+    { name = "torchvision", specifier = ">=0.23.0", index = "https://download.pytorch.org/whl/cu128" },
+    { name = "tqdm", specifier = ">=4.67.1" },
+    { name = "transformers", specifier = ">=4.56.2" },
+    { name = "uvicorn", specifier = ">=0.37.0" },
+    { name = "webvtt-py", specifier = ">=0.5.1" },
+    { name = "whisperx", specifier = ">=3.4.2" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "ruff", specifier = ">=0.13.2" }]
+
+[[package]]
 name = "propcache"
 version = "0.3.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1984,16 +2025,18 @@ wheels = [
 
 [[package]]
 name = "sacremoses"
-version = "0.0.53"
+version = "0.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "joblib" },
     { name = "regex" },
-    { name = "six" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/28/78/fef8d089db5b97546fd6d1ff2e813b8544e85670bf3a8c378c9d0250b98d/sacremoses-0.0.53.tar.gz", hash = "sha256:43715868766c643b35de4b8046cce236bfe59a7fa88b25eaf6ddf02bacf53a7a", size = 880628, upload-time = "2022-05-03T01:34:12.576Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1d/51/fbdc4af4f6e85d26169e28be3763fe50ddfd0d4bf8b871422b0788dcc4d2/sacremoses-0.1.1.tar.gz", hash = "sha256:b6fd5d3a766b02154ed80b962ddca91e1fd25629c0978c7efba21ebccf663934", size = 883188, upload-time = "2023-10-30T15:56:20.187Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0b/f0/89ee2bc9da434bd78464f288fdb346bc2932f2ee80a90b2a4bbbac262c74/sacremoses-0.1.1-py3-none-any.whl", hash = "sha256:31e04c98b169bfd902144824d191825cd69220cdb4ae4bcf1ec58a7db5587b1a", size = 897476, upload-time = "2023-10-30T15:56:18.121Z" },
+]
 
 [[package]]
 name = "safetensors"
@@ -2202,22 +2245,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/5d/a2/3a11b06715149bf3310b55a98b5c1e84a42cfb949a7b800bc75cb4e33abc/sqlalchemy-2.0.43-cp312-cp312-win32.whl", hash = "sha256:b535d35dea8bbb8195e7e2b40059e2253acb2b7579b73c1b432a35363694641d", size = 2098906, upload-time = "2025-08-11T15:55:00.645Z" },
     { url = "https://files.pythonhosted.org/packages/bc/09/405c915a974814b90aa591280623adc6ad6b322f61fd5cff80aeaef216c9/sqlalchemy-2.0.43-cp312-cp312-win_amd64.whl", hash = "sha256:1c6d85327ca688dbae7e2b06d7d84cfe4f3fffa5b5f9e21bb6ce9d0e1a0e0e0a", size = 2126260, upload-time = "2025-08-11T15:55:02.965Z" },
     { url = "https://files.pythonhosted.org/packages/b8/d9/13bdde6521f322861fab67473cec4b1cc8999f3871953531cf61945fad92/sqlalchemy-2.0.43-py3-none-any.whl", hash = "sha256:1681c21dd2ccee222c2fe0bef671d1aef7c504087c9c4e800371cfcc8ac966fc", size = 1924759, upload-time = "2025-08-11T15:39:53.024Z" },
-]
-
-[[package]]
-name = "stanza"
-version = "1.1.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy" },
-    { name = "protobuf" },
-    { name = "requests" },
-    { name = "torch" },
-    { name = "tqdm" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/e9/e7/7ad19790d27402b74e5a3225a1beb7f980a7c8927fee79c31b02a0a5e630/stanza-1.1.1.tar.gz", hash = "sha256:df8d683e371e06d9a6b9a67be1afa20e0e6328927e7dfd0cc77010eab35bf663", size = 169122, upload-time = "2020-08-13T06:08:09.986Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e7/8b/3a9e7a8d8cb14ad6afffc3983b7a7322a3a24d94ebc978a70746fcffc085/stanza-1.1.1-py3-none-any.whl", hash = "sha256:281e9f47623790e2770cf42f837346724c45a16a767302ec538287c54767eed7", size = 227644, upload-time = "2020-08-13T06:08:07.178Z" },
 ]
 
 [[package]]
@@ -2570,57 +2597,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/71/57/1616c8274c3442d80
 wheels = [
     { url = "https://files.pythonhosted.org/packages/85/cd/584a2ceb5532af99dd09e50919e3615ba99aa127e9850eafe5f31ddfdb9a/uvicorn-0.37.0-py3-none-any.whl", hash = "sha256:913b2b88672343739927ce381ff9e2ad62541f9f8289664fa1d1d3803fa2ce6c", size = 67976, upload-time = "2025-09-23T13:33:45.842Z" },
 ]
-
-[[package]]
-name = "video-processor"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "aiobotocore" },
-    { name = "argostranslate" },
-    { name = "asyncpg" },
-    { name = "coqui-tts" },
-    { name = "fastapi" },
-    { name = "nvidia-cublas-cu11" },
-    { name = "nvidia-cudnn-cu11" },
-    { name = "onnxruntime-gpu" },
-    { name = "opencv-python" },
-    { name = "pydantic-settings" },
-    { name = "torch" },
-    { name = "torchaudio" },
-    { name = "torchvision" },
-    { name = "uvicorn" },
-    { name = "webvtt-py" },
-    { name = "whisperx" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiobotocore", specifier = ">=2.24.2" },
-    { name = "argostranslate", specifier = ">=1.9.6" },
-    { name = "asyncpg", specifier = ">=0.30.0" },
-    { name = "coqui-tts", specifier = ">=0.27.1" },
-    { name = "fastapi", specifier = ">=0.118.0" },
-    { name = "nvidia-cublas-cu11", specifier = ">=11.11.3.6" },
-    { name = "nvidia-cudnn-cu11", specifier = ">=9.10.2.21" },
-    { name = "onnxruntime-gpu", specifier = ">=1.23.0" },
-    { name = "opencv-python", specifier = ">=4.12.0.88" },
-    { name = "pydantic-settings", specifier = ">=2.10.1" },
-    { name = "torch", specifier = ">=2.8.0", index = "https://download.pytorch.org/whl/cu128" },
-    { name = "torchaudio", specifier = ">=2.8.0", index = "https://download.pytorch.org/whl/cu128" },
-    { name = "torchvision", specifier = ">=0.23.0", index = "https://download.pytorch.org/whl/cu128" },
-    { name = "uvicorn", specifier = ">=0.37.0" },
-    { name = "webvtt-py", specifier = ">=0.5.1" },
-    { name = "whisperx", specifier = ">=3.4.2" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "ruff", specifier = ">=0.13.2" }]
 
 [[package]]
 name = "webvtt-py"

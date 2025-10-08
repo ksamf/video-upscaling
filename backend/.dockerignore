@@ -1,0 +1,6 @@
+tmp/
+.air.toml
+Makefile
+
+.env
+.env.temp

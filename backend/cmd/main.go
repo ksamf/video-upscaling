@@ -14,6 +14,7 @@ import (
 )
 
 type application struct {
+	host   string
 	port   int
 	models database.Models
 	config *config.Config
@@ -38,7 +39,8 @@ func main() {
 	defer pool.Close()
 	models := database.NewModel(pool)
 	app := &application{
-		port:   8000,
+		host:   conf.App.Host,
+		port:   conf.App.Port,
 		models: models,
 		config: conf,
 		s3:     s3,

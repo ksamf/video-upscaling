@@ -8,11 +8,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/ksamf/video-upscaling/backend/internal/database"
+	"github.com/ksamf/video-upscaling/backend/internal/rest"
 	"github.com/ksamf/video-upscaling/backend/internal/utils"
 )
 
 func (app *application) uploadVideo(c *gin.Context) {
-	realisticVideo := c.DefaultQuery("realistic", "true")
+	upscale := c.DefaultQuery("up", "false")
+	realisticVideo := c.DefaultQuery("real", "true")
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		c.String(http.StatusBadRequest, "Error get file: %v", err)
@@ -31,7 +33,7 @@ func (app *application) uploadVideo(c *gin.Context) {
 		return
 	}
 
-	if err = utils.VideoProcessor(file, header.Filename, realisticVideo, app.models.Videos, app.s3); err != nil {
+	if err = utils.VideoProcessor(file, header.Filename, upscale, realisticVideo, app.config.Api.BaseURL, app.models.Videos, app.s3); err != nil {
 		c.String(http.StatusInternalServerError, "Failed transcode video: %v", err)
 	}
 
@@ -110,23 +112,20 @@ func (app *application) updateVideoPartial(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Video updated successfully"})
 }
 
-// func (app *application) getVideoSubtitles(c *gin.Context) {
-// 	id, err := strconv.Atoi(c.Param("id"))
-// 	if err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid video ID"})
-// 		return
-// 	}
-// 	subtitles, err := app.models.Videos.GetSubtitles(id)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get video subtitles"})
-// 		return
-// 	}
-// 	if subtitles == nil {
-// 		c.JSON(http.StatusNotFound, gin.H{"error": "Subtitles not found"})
-// 		return
-// 	}
-// 	c.JSON(http.StatusOK, subtitles)
-// }
+func (app *application) getVideoSubtitles(c *gin.Context) {
+	id := c.Param("id")
+	lang := c.DefaultQuery("lang", "en")
+	if app.s3.ExitsObjects(id + "/" + lang + "_sub.vtt") {
+		c.String(http.StatusOK, fmt.Sprintf("https://%s/%s/%s/%s_sub.vtt", app.s3.Endpoint, app.s3.BucketName, id, lang))
+	} else {
+		err := rest.TranslateSubtitles(uuid.MustParse(id), app.config.Api.BaseURL, lang)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to translate subtitles"})
+			return
+		}
+		c.String(http.StatusOK, fmt.Sprintf("https://%s/%s/%s/%s_sub.vtt", app.s3.Endpoint, app.s3.BucketName, id, lang))
+	}
+}
 
 // func (app *application) getVideoDubbing(c *gin.Context) {
 // 	id, err := strconv.Atoi(c.Param("id"))
@@ -144,21 +143,4 @@ func (app *application) updateVideoPartial(c *gin.Context) {
 // 		return
 // 	}
 // 	c.JSON(http.StatusOK, dubbing)
-// }
-// func (app *application) getVideoQualities(c *gin.Context) {
-// 	id, err := strconv.Atoi(c.Param("id"))
-// 	if err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid video ID"})
-// 		return
-// 	}
-// 	qualities, err := app.models.Videos.GetQualities(id)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get video qualities"})
-// 		return
-// 	}
-// 	if qualities == nil {
-// 		c.JSON(http.StatusNotFound, gin.H{"error": "Video qualities not found"})
-// 		return
-// 	}
-// 	c.JSON(http.StatusOK, qualities)
 // }

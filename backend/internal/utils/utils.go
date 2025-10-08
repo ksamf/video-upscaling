@@ -8,12 +8,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/google/uuid"
 	"github.com/ksamf/video-upscaling/backend/internal/aws"
 	"github.com/ksamf/video-upscaling/backend/internal/database"
+	"github.com/ksamf/video-upscaling/backend/internal/rest"
 )
 
 var videoSettings = []map[string]int{
@@ -48,7 +50,13 @@ type VideoInfo struct {
 	} `json:"streams"`
 }
 
-func VideoProcessor(file io.Reader, name, realisticVideo string, db database.VideoModel, s3 *aws.S3Storage) error {
+func VideoProcessor(file io.Reader,
+	name,
+	upscale,
+	realisticVideo string,
+	baseUrl string,
+	db database.VideoModel,
+	s3 *aws.S3Storage) error {
 	videoID := uuid.New()
 	videoIDStr := videoID.String()
 	s3URL := fmt.Sprintf("https://%s/%s/%s", s3.Endpoint, s3.BucketName, videoIDStr)
@@ -92,6 +100,9 @@ func VideoProcessor(file io.Reader, name, realisticVideo string, db database.Vid
 		if err := extractAudio(tmpInputPath, videoIDStr, s3); err != nil {
 			errCh <- fmt.Errorf("audio extract failed: %w", err)
 		}
+		if err := rest.CreateSubtitles(videoID, baseUrl); err != nil {
+			errCh <- fmt.Errorf("create subtitles request failed: %w", err)
+		}
 	}()
 
 	wg.Add(1)
@@ -128,6 +139,18 @@ func VideoProcessor(file io.Reader, name, realisticVideo string, db database.Vid
 	}
 
 	wg.Wait()
+	boolUp, err := strconv.ParseBool(upscale)
+	if err != nil {
+		// fmt.Errorf("failed parse upscale: %w", err)
+	}
+	if boolUp {
+		// wg.Add(1)
+		go func() {
+			// defer wg.Done()
+			rest.Upscale(videoID, baseUrl, height, realisticVideo)
+			// errCh <- fmt.Errorf("upscale %d failed: %w", videoID, err)
+		}()
+	}
 	close(errCh)
 
 	var hasErrors bool

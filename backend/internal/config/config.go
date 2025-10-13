@@ -17,6 +17,12 @@ type PgConfig struct {
 	Pass string
 	Name string
 }
+
+type RedisConfig struct {
+	Host string
+	Port int
+	Pass string
+}
 type S3Config struct {
 	AccessKeyID     string
 	SecretAccessKey string
@@ -30,6 +36,7 @@ type ApiConfig struct {
 type Config struct {
 	App      AppConfig
 	Postgres PgConfig
+	Redis    RedisConfig
 	S3       S3Config
 	Api      ApiConfig
 }
@@ -50,6 +57,11 @@ func New() *Config {
 			User: getEnv("DB_USER", ""),
 			Pass: getEnv("DB_PASS", ""),
 			Name: getEnv("DB_NAME", ""),
+		},
+		Redis: RedisConfig{
+			Host: getEnv("REDIS_HOST", "localhost"),
+			Port: getEnvAsInt("REDIS_PORT", 6379),
+			Pass: getEnv("REDIS_PASS", ""),
 		},
 		S3: S3Config{
 			AccessKeyID:     getEnv("S3_ACCESS_KEY_ID", ""),

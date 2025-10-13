@@ -1,7 +1,7 @@
 import tempfile
 from uuid import UUID
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from src.video_processing import VideoProcessor
 from src.audio_processing import AudioProcessor
@@ -44,15 +44,18 @@ async def upscale(
 
 
 @app.post("/subtitles/{id}")
-async def create_sub(id: UUID):
+async def create_sub(id: UUID) -> Response:
     """
     Creates subtitles original and english languages for the video and uploads to S3.
     Args:
         id (UUID): Unique identifier folder in S3.
+    Returns:
+        orig_lang (str): language video
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         audio_processor = AudioProcessor(upload_id=id)
-        await audio_processor.transcribe_video(tmpdir)
+        orig_lang = await audio_processor.transcribe_video(tmpdir)
+    return Response(orig_lang, media_type="text/plain")
 
 
 @app.post("/translate/{id}")

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,39 +9,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/ksamf/video-upscaling/backend/internal/aws"
 	"github.com/ksamf/video-upscaling/backend/internal/database"
 	"github.com/ksamf/video-upscaling/backend/internal/rest"
 )
-
-var videoSettings = []map[string]int{
-	{"height": 240, "crf": 26},
-	{"height": 360, "crf": 24},
-	{"height": 480, "crf": 22},
-	{"height": 720, "crf": 20},
-	{"height": 1080, "crf": 18},
-	{"height": 1440, "crf": 17},
-	{"height": 2160, "crf": 16},
-	{"height": 4320, "crf": 14},
-	{"height": 8640, "crf": 12},
-	{"height": 17280, "crf": 8},
-}
-
-var qualities = map[int][]int{
-	240:  {240, 360, 480},
-	360:  {240, 360, 480, 720},
-	480:  {240, 360, 480, 720, 1080},
-	720:  {240, 360, 480, 720, 1080, 1440},
-	1080: {240, 360, 480, 720, 1080, 1440, 2160},
-	1440: {240, 360, 480, 720, 1080, 1440, 2160, 4320},
-	2160: {240, 360, 480, 720, 1080, 1440, 2160, 4320, 8640},
-	4320: {240, 360, 480, 720, 1080, 1440, 2160, 4320, 8640, 17280},
-}
 
 type VideoInfo struct {
 	Streams []struct {
@@ -50,6 +29,8 @@ type VideoInfo struct {
 	} `json:"streams"`
 }
 
+var standardHeights = []int{144, 240, 360, 480, 720, 1080, 1440, 2160, 4320}
+
 func VideoProcessor(file io.Reader,
 	name,
 	upscale,
@@ -57,6 +38,7 @@ func VideoProcessor(file io.Reader,
 	baseUrl string,
 	db database.VideoModel,
 	s3 *aws.S3Storage) error {
+
 	videoID := uuid.New()
 	videoIDStr := videoID.String()
 	s3URL := fmt.Sprintf("https://%s/%s/%s", s3.Endpoint, s3.BucketName, videoIDStr)
@@ -68,12 +50,23 @@ func VideoProcessor(file io.Reader,
 	}
 	if _, err := io.Copy(out, file); err != nil {
 		out.Close()
+		os.Remove(tmpInputPath)
 		return fmt.Errorf("failed to write temp file: %w", err)
 	}
-	out.Close()
-	defer os.Remove(tmpInputPath)
+	if err := out.Close(); err != nil {
+		os.Remove(tmpInputPath)
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+	defer func() { _ = os.Remove(tmpInputPath) }()
 
-	width, height, err := getResolutionFromFile(tmpInputPath)
+	width, height, err := getResolution(tmpInputPath)
+	if !slices.Contains(standardHeights, height) {
+		height = closestStandardHeight(height)
+		crf := 26 - 2*height
+		transcodeVideo(tmpInputPath, height, crf, videoIDStr, s3, 30*time.Minute)
+
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to probe resolution: %w", err)
 	}
@@ -84,92 +77,146 @@ func VideoProcessor(file io.Reader,
 	if err != nil {
 		return fmt.Errorf("failed to open original temp file: %w", err)
 	}
-	defer origFile.Close()
-
 	if err := s3.PutObject(origKey, origFile); err != nil {
+		_ = origFile.Close()
 		return fmt.Errorf("failed to upload original: %w", err)
 	}
+	_ = origFile.Close()
 	log.Printf("Uploaded original as %s", origKey)
 
-	errCh := make(chan error, 10)
+	qualities := lowerStandardRes(height)
+
+	errCh := make(chan error, len(qualities)+5)
+	var collected []error
+	var mu sync.Mutex
+	doneErr := make(chan struct{})
+
+	go func() {
+		for e := range errCh {
+			if e == nil {
+				continue
+			}
+			mu.Lock()
+			collected = append(collected, e)
+			mu.Unlock()
+			log.Printf("worker error: %v", e)
+		}
+		close(doneErr)
+	}()
+
 	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+
 		if err := extractAudio(tmpInputPath, videoIDStr, s3); err != nil {
 			errCh <- fmt.Errorf("audio extract failed: %w", err)
 		}
-		if err := rest.CreateSubtitles(videoID, baseUrl); err != nil {
-			errCh <- fmt.Errorf("create subtitles request failed: %w", err)
-		}
-	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+		lang, err := rest.CreateSubtitles(videoID, baseUrl)
+		if err != nil {
+			errCh <- fmt.Errorf("create subtitles request failed: %w", err)
+			return
+		}
+		langId, err := db.GetLanguageId(lang)
+		if langId == 0 || err != nil {
+			errCh <- fmt.Errorf("db get language failed: %w", err)
+		}
+
 		if err := db.Insert(&database.Video{
-			VideoId:   videoID,
-			Name:      strings.TrimSuffix(name, filepath.Ext(name)),
-			VideoPath: s3URL,
+			VideoId:    videoID,
+			Name:       strings.TrimSuffix(name, filepath.Ext(name)),
+			VideoPath:  s3URL,
+			LanguageId: langId,
+			Quality:    height,
 		}); err != nil {
 			errCh <- fmt.Errorf("db insert failed: %w", err)
-		}
-		if err := db.UpdateQualities(videoID, qualities[height]); err != nil {
-			errCh <- fmt.Errorf("db update qualities failed: %w", err)
+			return
 		}
 	}()
 
-	q := qualities[height]
-	maxOutput := q[len(q)-2]
-
-	for _, vs := range videoSettings {
-		targetHeight := vs["height"]
-		crf := vs["crf"]
-
-		if targetHeight < maxOutput {
-			wg.Add(1)
-			go func(targetHeight, crf int) {
-				defer wg.Done()
-				if err := transcodeVideo(tmpInputPath, targetHeight, crf, videoIDStr, s3); err != nil {
-					errCh <- fmt.Errorf("transcode %dp failed: %w", targetHeight, err)
-				}
-			}(targetHeight, crf)
+	for i, q := range qualities {
+		crf := 26 - 2*i
+		if crf < 8 {
+			crf = 8
 		}
+		if crf > 26 {
+			crf = 26
+		}
+
+		wg.Add(1)
+		go func(targetHeight, crf int) {
+			defer wg.Done()
+			if err := transcodeVideo(tmpInputPath, targetHeight, crf, videoIDStr, s3, 30*time.Minute); err != nil {
+				errCh <- fmt.Errorf("transcode %dp failed: %w", targetHeight, err)
+			}
+		}(q, crf)
+	}
+
+	boolUp, _ := strconv.ParseBool(upscale)
+	if height > 1440 {
+		boolUp = false
+	}
+	if boolUp {
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := rest.Upscale(videoID, baseUrl, height, realisticVideo); err != nil {
+				errCh <- fmt.Errorf("upscale failed: %w", err)
+			}
+		}()
 	}
 
 	wg.Wait()
-	boolUp, err := strconv.ParseBool(upscale)
-	if err != nil {
-		// fmt.Errorf("failed parse upscale: %w", err)
-	}
-	if boolUp {
-		// wg.Add(1)
-		go func() {
-			// defer wg.Done()
-			rest.Upscale(videoID, baseUrl, height, realisticVideo)
-			// errCh <- fmt.Errorf("upscale %d failed: %w", videoID, err)
-		}()
-	}
 	close(errCh)
+	<-doneErr
 
-	var hasErrors bool
-	for err := range errCh {
-		if err != nil {
-			hasErrors = true
-			log.Printf("processing error: %v", err)
+	if len(collected) > 0 {
+		for _, e := range collected {
+			log.Printf("processing error: %v", e)
 		}
-	}
-
-	if hasErrors {
 		return fmt.Errorf("some processing tasks failed")
 	}
 
 	return nil
 }
+func closestStandardHeight(height int) int {
+	standardHeights := []int{144, 240, 360, 480, 720, 1080, 1440, 2160, 4320}
+	closest := standardHeights[0]
+	minDiff := abs(height - closest)
+	for _, h := range standardHeights[1:] {
+		diff := abs(height - h)
+		if diff < minDiff {
+			minDiff = diff
+			closest = h
+		}
+	}
+	return closest
+}
 
-func getResolutionFromFile(path string) (int, int, error) {
-	cmd := exec.Command("ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", "-loglevel", "error", path)
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+func lowerStandardRes(base int) []int {
+	var result []int
+	for _, h := range standardHeights {
+		if h < base {
+			result = append(result, h)
+		}
+	}
+	return result
+}
+
+func getResolution(path string) (int, int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", "-loglevel", "error", path)
 	output, err := cmd.Output()
 	if err != nil {
 		return 0, 0, fmt.Errorf("ffprobe failed: %w", err)
@@ -188,9 +235,16 @@ func getResolutionFromFile(path string) (int, int, error) {
 	return 0, 0, fmt.Errorf("no video stream found")
 }
 
-func transcodeVideo(inputPath string, targetHeight, crf int, fileName string, s3 *aws.S3Storage) error {
+func transcodeVideo(inputPath string, targetHeight, crf int, fileName string, s3 *aws.S3Storage, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	tmpOut := filepath.Join(os.TempDir(), fmt.Sprintf("%s_%d.mp4", fileName, targetHeight))
-	cmd := exec.Command("ffmpeg",
+	defer func() {
+		_ = os.Remove(tmpOut)
+	}()
+
+	args := []string{
 		"-i", inputPath,
 		"-map", "0:v:0",
 		"-c:v", "libx264",
@@ -202,9 +256,11 @@ func transcodeVideo(inputPath string, targetHeight, crf int, fileName string, s3
 		"-fflags", "+genpts",
 		"-loglevel", "error",
 		tmpOut,
-	)
+	}
 
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 	cmd.Stderr = os.Stderr
+
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("ffmpeg transcode failed: %w", err)
 	}
@@ -213,10 +269,7 @@ func transcodeVideo(inputPath string, targetHeight, crf int, fileName string, s3
 	if err != nil {
 		return fmt.Errorf("failed to open transcoded file: %w", err)
 	}
-	defer func() {
-		outFile.Close()
-		os.Remove(tmpOut)
-	}()
+	defer outFile.Close()
 
 	key := fmt.Sprintf("%s/%d.mp4", fileName, targetHeight)
 	if err := s3.PutObject(key, outFile); err != nil {
@@ -227,30 +280,35 @@ func transcodeVideo(inputPath string, targetHeight, crf int, fileName string, s3
 }
 
 func extractAudio(inputPath, fileName string, s3 *aws.S3Storage) error {
-	cmd := exec.Command("ffmpeg",
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	tmpAudio := filepath.Join(os.TempDir(), fmt.Sprintf("%s_audio.mp3", fileName))
+	defer func() { _ = os.Remove(tmpAudio) }()
+
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-y",
 		"-i", inputPath,
 		"-vn",
 		"-acodec", "mp3",
 		"-f", "mp3",
-		"pipe:1",
 		"-loglevel", "error",
+		tmpAudio,
 	)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("stdout pipe failed: %w", err)
-	}
 	cmd.Stderr = os.Stderr
 
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("ffmpeg start failed: %w", err)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("ffmpeg audio extract failed: %w", err)
 	}
 
-	if err := s3.PutObject(fmt.Sprintf("%s/audio.mp3", fileName), stdout); err != nil {
+	f, err := os.Open(tmpAudio)
+	if err != nil {
+		return fmt.Errorf("open extracted audio failed: %w", err)
+	}
+	defer f.Close()
+
+	if err := s3.PutObject(fmt.Sprintf("%s/audio.mp3", fileName), f); err != nil {
 		return fmt.Errorf("s3 upload failed: %w", err)
-	}
-
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("ffmpeg wait failed: %w", err)
 	}
 
 	return nil

@@ -8,16 +8,13 @@ from uuid import UUID
 import torch
 import webvtt
 import whisperx
-from TTS.api import TTS
+from whisperx.SubtitlesProcessor import SubtitlesProcessor
 from transformers import MarianMTModel, MarianTokenizer
 
-import src.db as db
 from src.s3_storage import s3_client
-from whisperx.SubtitlesProcessor import SubtitlesProcessor
 from config import settings
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 class AudioProcessor:
@@ -31,23 +28,23 @@ class AudioProcessor:
     """
 
     def __init__(self, upload_id: UUID):
-        if not os.path.exists("models/transcribe"):
-            os.mkdir("models/transcribe")
+        if not os.path.exists(settings.TRANSCRIBE_PATH):
+            os.mkdir(settings.TRANSCRIBE_PATH)
 
-        if not os.path.exists("models/translate"):
-            os.mkdir("models/translate")
+        if not os.path.exists(settings.TRANSLATE_PATH):
+            os.mkdir(settings.TRANSLATE_PATH)
 
         self.upload_id = upload_id
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        self._tts: Optional[TTS] = None
+        # self._tts: Optional[TTS] = None
         self._whisper_model = None
         self._align_model = None
         self._align_meta = None
 
         self.language: Optional[str] = None
 
-    async def transcribe_video(self, tmpdir: Path) -> None:
+    async def transcribe_video(self, tmpdir: Path) -> str:
         """
         Transcribes video audio to VTT subtitles using WhisperX and uploads them to S3.
         """
@@ -92,10 +89,10 @@ class AudioProcessor:
         self.language = lang
         if self.language != "en":
             await self.translate_sub(tmpdir, "en")
-        await db.update_lang(self.upload_id, lang)
         await s3_client.upload_file(str(self.upload_id), str(sub_path))
-
         logger.info(f"[{self.upload_id}] Transcription complete: {lang}")
+
+        return lang
 
     def _load_mt_model(self, src_lang: str, tgt_lang: str):
         model_name = f"Helsinki-NLP/opus-mt-{src_lang}-{tgt_lang}"

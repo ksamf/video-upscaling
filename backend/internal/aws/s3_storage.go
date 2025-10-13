@@ -19,8 +19,7 @@ type S3Storage struct {
 	Client          *minio.Client
 }
 
-func New() *S3Storage {
-	conf := config.New()
+func New(conf *config.Config) *S3Storage {
 	minioClient, err := minio.New(conf.S3.EndpointURL, &minio.Options{
 		Creds:  credentials.NewStaticV4(conf.S3.AccessKeyID, conf.S3.SecretAccessKey, ""),
 		Secure: false,

@@ -1,1 +1,1 @@
-DELETE FROM languages;
+TRUNCATE FROM languages;

@@ -13,10 +13,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - internal_net
-      - data_net
-
+      kafka:
+        condition: service_healthy
 
   processor:
     image: processor
@@ -37,9 +35,8 @@ services:
     environment:
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: all
-    networks:
-      - internal_net
-    
+
+  
   db:
     image: postgres:17-alpine3.22
     ports:
@@ -53,8 +50,7 @@ services:
       retries: 5
     volumes:
       - db-data:/var/lib/postgresql/data
-    networks:
-      - data_net
+
 
   redis:
     image: redis:alpine3.22
@@ -70,14 +66,35 @@ services:
       retries: 5
     volumes:
       - redis-data:/data
-    networks:
-      - data_net
 
-networks:
-  internal_net:
-    driver: bridge
-  data_net:
-    driver: bridge
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    ports:
+      - "9092:9092"
+    env_file:
+      - ./.env
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --list --bootstrap-server localhost:9092 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    ports:
+      - "2181:2181"
+    env_file:
+      - ./.env
+    healthcheck:
+      test: ["CMD-SHELL", "echo stat | nc localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   db-data:

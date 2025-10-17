@@ -8,6 +8,7 @@ import (
 
 func (app *application) routes() http.Handler {
 	router := gin.Default()
+	gin.SetMode(app.config.App.Debug)
 	router.POST("/upload", app.uploadVideo)
 	router.GET("/video", app.getAllVideos)
 	router.GET("/video/:id", app.getVideo)

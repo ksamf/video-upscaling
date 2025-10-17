@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 )
 
-func Upscale(id uuid.UUID, baseUrl string, height int, realistic string) error {
+func Upscale(id uuid.UUID, baseUrl string, height int, realistic bool) error {
 	file := strconv.Itoa(height)
-	url := fmt.Sprintf("%s/upscale/%s?file=%s&real=%s", baseUrl, id, file, realistic)
+	url := fmt.Sprintf("%s/upscale/%s?file=%s&real=%t", baseUrl, id, file, realistic)
 	client := http.Client{}
 	req, err := http.NewRequest("POST", url, nil)
 	if err != nil {

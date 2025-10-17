@@ -8,7 +8,7 @@ import (
 type AppConfig struct {
 	Host  string
 	Port  int
-	Debug bool
+	Debug string
 }
 type PgConfig struct {
 	Host string
@@ -33,23 +33,29 @@ type S3Config struct {
 type ApiConfig struct {
 	BaseURL string
 }
+
+type KafkaConfig struct {
+	Host string
+	Port int
+}
 type Config struct {
 	App      AppConfig
 	Postgres PgConfig
 	Redis    RedisConfig
 	S3       S3Config
 	Api      ApiConfig
+	Kafka    KafkaConfig
 }
 
 func New() *Config {
-	// if err := godotenv.Load(".env"); err != nil {
+	// if err := godotenv.Load(".env.dev"); err != nil {
 	// 	panic(err)
 	// }
 	return &Config{
 		App: AppConfig{
 			Host:  getEnv("APP_HOST", "localhost"),
 			Port:  getEnvAsInt("APP_PORT", 8000),
-			Debug: getEnv("APP_DEBUG", "false") == "true",
+			Debug: getEnv("APP_DEBUG", "release"),
 		},
 		Postgres: PgConfig{
 			Host: getEnv("DB_HOST", ""),
@@ -71,6 +77,10 @@ func New() *Config {
 		},
 		Api: ApiConfig{
 			BaseURL: getEnv("BASE_URL", ""),
+		},
+		Kafka: KafkaConfig{
+			Host: getEnv("KAFKA_HOST", "localhost"),
+			Port: getEnvAsInt("KAFKA_PORT", 9092),
 		},
 	}
 }

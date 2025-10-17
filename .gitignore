@@ -5,6 +5,7 @@ __pycache__/
 uploads/
 .python-version
 .env
+.env.dev
 .vscode/
 tst/
 transcribe/

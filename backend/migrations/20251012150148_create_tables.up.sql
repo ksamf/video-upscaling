@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS languages (
 CREATE TABLE IF NOT EXISTS videos (
     video_id UUID PRIMARY KEY,
     name TEXT NOT NULL,
-    video_path TEXT NOT NULL,
     language_id INT,
     quality INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

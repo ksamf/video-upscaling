@@ -1,16 +1,16 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
+	"log"
 
 	_ "github.com/lib/pq"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/ksamf/video-upscaling/backend/internal/aws"
 	"github.com/ksamf/video-upscaling/backend/internal/config"
 	"github.com/ksamf/video-upscaling/backend/internal/database"
+	broker "github.com/ksamf/video-upscaling/backend/internal/kafka"
+	cache "github.com/ksamf/video-upscaling/backend/internal/redis"
+	"github.com/ksamf/video-upscaling/backend/internal/storage"
+	"github.com/ksamf/video-upscaling/backend/internal/utils"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -19,46 +19,44 @@ type application struct {
 	port   int
 	models database.Models
 	config *config.Config
-	s3     *aws.S3Storage
+	s3     *storage.Storage
 	redis  *redis.Client
+	kafka  *broker.KafkaClients
 }
 
 func main() {
 
 	conf := config.New()
-	s3 := aws.New(conf)
+	s3 := storage.New(conf)
+	pool := database.New(conf)
+	redis := cache.New(conf)
+	kafka := broker.New(conf)
 
-	url := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		conf.Postgres.User,
-		conf.Postgres.Pass,
-		conf.Postgres.Host,
-		conf.Postgres.Port,
-		conf.Postgres.Name)
-	pool, err := pgxpool.New(context.Background(), url)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
-		os.Exit(1)
-	}
 	defer pool.Close()
+	defer redis.Close()
+	defer s3.CredContext().Client.CloseIdleConnections()
+	defer func() {
+		if kafka.Writer != nil {
+			kafka.Writer.Close()
+		}
+		if kafka.Reader != nil {
+			kafka.Reader.Close()
+		}
+	}()
 	models := database.NewModel(pool)
-	client := redis.NewClient(&redis.Options{
-		Addr:     conf.Redis.Host + ":" + fmt.Sprintf("%d", conf.Redis.Port),
-		Password: conf.Redis.Pass,
-		DB:       0,
-	})
-	_, err = client.Ping(context.Background()).Result()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to connect to redis: %v\n", err)
-		os.Exit(1)
-	}
+	buckets := storage.NewBucket(s3, conf)
+
 	app := &application{
 		host:   conf.App.Host,
 		port:   conf.App.Port,
 		models: models,
 		config: conf,
-		s3:     s3,
-		redis:  client,
+		s3:     buckets,
+		redis:  redis,
+		kafka:  kafka,
 	}
+	log.Println("Kafka worker started and waiting for messages...")
+	go utils.StartVideoWorker(app.kafka.Reader, app.models.Videos, app.s3)
 	if err := app.serve(); err != nil {
 		panic(err)
 	}

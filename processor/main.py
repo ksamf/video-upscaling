@@ -5,8 +5,9 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from src.video_processing import VideoProcessor
 from src.audio_processing import AudioProcessor
+from config import settings
 
-app = FastAPI(title="Video Upscaling and Subtitle Service")
+app = FastAPI(title="Video Upscaling and Subtitle Service", debug=settings.APP_DEBUG)
 
 app.add_middleware(
     CORSMiddleware,

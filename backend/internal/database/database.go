@@ -43,15 +43,15 @@ func (m *VideoModel) Insert(video *Video) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
 
-	query := "INSERT INTO videos(video_id, name, video_path, language_id, quality) VALUES($1, $2, $3, $4, $5)"
-	_, err := m.Pool.Exec(ctx, query, video.VideoId, video.Name, video.VideoPath, video.LanguageId, video.Quality)
+	query := "INSERT INTO videos(video_id, name, language_id, quality) VALUES($1, $2, $3, $4)"
+	_, err := m.Pool.Exec(ctx, query, video.VideoId, video.Name, video.LanguageId, video.Quality)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (m *VideoModel) GetAll(limit, offset string) ([]*Video, error) {
+func (m *VideoModel) GetAll(limit, offset string, getURL func(uuid.UUID) string) ([]*Video, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	intLimit, err := strconv.Atoi(limit)
@@ -62,7 +62,7 @@ func (m *VideoModel) GetAll(limit, offset string) ([]*Video, error) {
 	if err != nil {
 		intOffset = 0
 	}
-	query := "SELECT video_id, name, video_path, language_id, quality, created_at, updated_at FROM videos LIMIT $1 OFFSET $2"
+	query := "SELECT video_id, name, language_id, quality, created_at, updated_at FROM videos LIMIT $1 OFFSET $2"
 	rows, err := m.Pool.Query(ctx, query, intLimit, intOffset)
 	if err != nil {
 		return nil, err
@@ -74,7 +74,6 @@ func (m *VideoModel) GetAll(limit, offset string) ([]*Video, error) {
 		if err := rows.Scan(
 			&video.VideoId,
 			&video.Name,
-			&video.VideoPath,
 			&video.LanguageId,
 			&video.Quality,
 			&video.CreatedAt,
@@ -82,6 +81,7 @@ func (m *VideoModel) GetAll(limit, offset string) ([]*Video, error) {
 		); err != nil {
 			return nil, err
 		}
+		video.VideoPath = getURL(video.VideoId)
 		videos = append(videos, &video)
 	}
 
@@ -91,7 +91,7 @@ func (m *VideoModel) GetAll(limit, offset string) ([]*Video, error) {
 	return videos, nil
 }
 
-func (m *VideoModel) GetByID(id uuid.UUID) (*FullVideo, error) {
+func (m *VideoModel) GetByID(id uuid.UUID, getURL func(uuid.UUID) string) (*FullVideo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -99,7 +99,6 @@ func (m *VideoModel) GetByID(id uuid.UUID) (*FullVideo, error) {
 		SELECT 
 			v.video_id,
 			v.name,
-			v.video_path,
 			l.code,
 			v.quality,
 			v.created_at,
@@ -115,7 +114,7 @@ func (m *VideoModel) GetByID(id uuid.UUID) (*FullVideo, error) {
 	var q int
 	var lang sql.NullString
 
-	err := row.Scan(&v.VideoId, &v.Name, &v.VideoPath, &lang, &q, &v.CreatedAt, &v.UpdatedAt)
+	err := row.Scan(&v.VideoId, &v.Name, &lang, &q, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -130,6 +129,7 @@ func (m *VideoModel) GetByID(id uuid.UUID) (*FullVideo, error) {
 	}
 
 	v.Qualities = standardHeights[0 : slices.Index(standardHeights, q)+3]
+	v.VideoPath = getURL(v.VideoId)
 	return &v, nil
 }
 
@@ -138,7 +138,6 @@ func (m *VideoModel) UpdatePartial(id uuid.UUID, field string, value any) error 
 		"language_id": true,
 		"quality":     true,
 		"name":        true,
-		"video_path":  true,
 	}
 	if !validFields[field] {
 		return fmt.Errorf("invalid field: %s", field)

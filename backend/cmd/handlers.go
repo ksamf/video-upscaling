@@ -1,46 +1,94 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/ksamf/video-upscaling/backend/internal/database"
+	broker "github.com/ksamf/video-upscaling/backend/internal/kafka"
 	"github.com/ksamf/video-upscaling/backend/internal/rest"
-	"github.com/ksamf/video-upscaling/backend/internal/utils"
 )
 
 func (app *application) uploadVideo(c *gin.Context) {
+	upscale, _ := strconv.ParseBool(c.DefaultQuery("up", "false"))
+	realisticVideo, _ := strconv.ParseBool(c.DefaultQuery("real", "true"))
 
-	upscale := c.DefaultQuery("up", "false")
-	realisticVideo := c.DefaultQuery("real", "true")
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Error get file"})
 		return
 	}
-	name := c.DefaultQuery("name", header.Filename)
+	defer file.Close()
+
 	ext := filepath.Ext(header.Filename)
+	name := c.DefaultQuery("name", strings.Trim(header.Filename, "."+ext))
 	allowed := map[string]bool{
-		".mp4":  true,
-		".mov":  true,
-		".avi":  true,
-		".mkv":  true,
-		".webm": true,
+		".mp4": true, ".mov": true, ".avi": true, ".mkv": true, ".webm": true,
 	}
 	if !allowed[ext] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Недопустимый формат файла"})
 		return
 	}
 
-	if err = utils.VideoProcessor(file, name, upscale, realisticVideo, app.config.Api.BaseURL, app.models.Videos, app.s3); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed transcode video"})
+	videoId := uuid.New()
+	tmpInputPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s_input%s", videoId, ext))
+
+	out, err := os.Create(tmpInputPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create tmp file"})
+		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Видео успешно загружено"})
+	if _, err := io.Copy(out, file); err != nil {
+		out.Close()
+		os.Remove(tmpInputPath)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save tmp file"})
+		return
+	}
+	out.Close()
+
+	s3Key := fmt.Sprintf("%s/tmp%s", videoId, ext)
+
+	tmpFile, err := os.Open(tmpInputPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open tmp file"})
+		return
+	}
+	defer tmpFile.Close()
+
+	if err := app.s3.PutObject(s3Key, tmpFile); err != nil {
+		os.Remove(tmpInputPath)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload to S3"})
+		return
+	}
+	os.Remove(tmpInputPath)
+
+	msg := broker.VideoJob{
+		VideoID:        videoId,
+		FileName:       name,
+		FileExt:        ext,
+		Upscale:        upscale,
+		RealisticVideo: realisticVideo,
+		BaseURL:        app.config.Api.BaseURL,
+	}
+
+	if err := broker.Publish(context.Background(), app.kafka.Writer, msg); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to publish kafka"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Видео успешно загружено",
+	})
 }
 
 func (app *application) getVideo(c *gin.Context) {
@@ -53,7 +101,7 @@ func (app *application) getVideo(c *gin.Context) {
 		c.JSON(http.StatusOK, videoCache)
 		return
 	}
-	video, err := app.models.Videos.GetByID(id)
+	video, err := app.models.Videos.GetByID(id, app.s3.GetURL)
 	if video == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Video not found"})
 		return
@@ -73,7 +121,7 @@ func (app *application) getAllVideos(c *gin.Context) {
 		c.JSON(http.StatusOK, videosCache)
 		return
 	}
-	videos, err := app.models.Videos.GetAll(limit, offset)
+	videos, err := app.models.Videos.GetAll(limit, offset, app.s3.GetURL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get videos: %w", err)})
 		return

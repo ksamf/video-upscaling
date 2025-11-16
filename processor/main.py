@@ -1,81 +1,87 @@
+import json
+import asyncio
+import logging
 import tempfile
-from uuid import UUID
-
-from fastapi import FastAPI, Response
-from fastapi.middleware.cors import CORSMiddleware
-from src.video_processing import VideoProcessor
+import signal
+from confluent_kafka.experimental.aio import AIOProducer, AIOConsumer
 from src.audio_processing import AudioProcessor
+from src.video_processing import VideoProcessor
 from config import settings
 
-app = FastAPI(title="Video Upscaling and Subtitle Service", debug=settings.APP_DEBUG)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+stop_event = asyncio.Event()
+logger = logging.getLogger(__name__)
 
 
-@app.get("/health")
-async def health_check():
-    return {"status": "ok"}
+def handle_stop(*_):
+    stop_event.set()
 
 
-@app.post("/upscale/{id}")
-async def upscale(
-    id: UUID,
-    file: str,
-    real: bool,
-):
-    """
-    Upscales video to x2 resolution and uploads to S3.
-    Args:
-        id (UUID): Unique identifier folder in S3.
-        file (str): file name in S3 without extension.
-        real (bool): Whether to use realistic upscaling model.
-    """
-    with tempfile.TemporaryDirectory() as tmpdir:
-        video_processor = VideoProcessor(
-            upload_id=id,
-            realistic=real,
-        )
-        await video_processor.upscale_video(id, file, tmpdir)
+async def main():
+    conf_consumer = {
+        "bootstrap.servers": f"{settings.KAFKA_HOST}:{settings.KAFKA_PORT}",
+        "group.id": "video-processor",
+        "auto.offset.reset": "earliest",
+    }
+    conf_producer = {
+        "bootstrap.servers": f"{settings.KAFKA_HOST}:{settings.KAFKA_PORT}",
+    }
+
+    consumer = AIOConsumer(conf_consumer)
+    await consumer.subscribe(["video_subtitle", "video_upscale"])
+    producer = AIOProducer(conf_producer)
+
+    try:
+        while not stop_event.is_set():
+            msg = await consumer.poll(timeout=1.0)
+            if msg is None or msg.error():
+                continue
+
+            topic = msg.topic()
+            data = json.loads(msg.value().decode("utf-8"))
+            if data.get("done"):
+                continue
+
+            logger.info(f"Получено сообщение из {topic}: {data}")
+
+            if topic == "video_subtitle":
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    audio_processor = AudioProcessor(upload_id=data["video_id"])
+                    if not data["language"]:
+                        orig_lang = await audio_processor.transcribe_video(tmpdir)
+                        data["language"] = orig_lang
+                    else:
+                        await audio_processor.translate_sub(tmpdir, data["language"])
+                    data["done"] = True
+
+                    await producer.produce(
+                        topic="video_subtitle",
+                        value=json.dumps(data).encode("utf-8"),
+                    )
+                    await producer.flush()
+
+            elif topic == "video_upscale":
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    video_processor = VideoProcessor(
+                        upload_id=data["video_id"],
+                        realistic=data["realistic"],
+                    )
+                    await video_processor.upscale_video(
+                        data["video_id"], data["quality"], tmpdir
+                    )
+                    data["done"] = True
+
+                    await producer.produce(
+                        topic="video_upscale",
+                        value=json.dumps(data).encode("utf-8"),
+                    )
+                    await producer.flush()
+    finally:
+        await consumer.close()
+        await producer.close()
 
 
-@app.post("/subtitles/{id}")
-async def create_sub(id: UUID) -> Response:
-    """
-    Creates subtitles original and english languages for the video and uploads to S3.
-    Args:
-        id (UUID): Unique identifier folder in S3.
-    Returns:
-        orig_lang (str): language video
-    """
-    with tempfile.TemporaryDirectory() as tmpdir:
-        audio_processor = AudioProcessor(upload_id=id)
-        orig_lang = await audio_processor.transcribe_video(tmpdir)
-    return Response(orig_lang, media_type="text/plain")
-
-
-@app.post("/translate/{id}")
-async def translate_sub(id: UUID, lang: str):
-    """
-    Translates english subtitles to the specified language and uploads to S3.
-    Args:
-        id (UUID): Unique identifier folder in S3.
-        lang (str): Language code to translate subtitles to.
-    """
-    with tempfile.TemporaryDirectory() as tmpdir:
-        audio_processor = AudioProcessor(upload_id=id)
-        await audio_processor.translate_sub(tmpdir, lang)
-
-
-# if __name__ == "__main__":
-#     uvicorn.run(
-#         "main:app",
-#         host=settings.APP_HOST,
-#         port=settings.APP_PORT,
-#         reload=settings.APP_DEBUG,
-#     )
+if __name__ == "__main__":
+    signal.signal(signal.SIGINT, handle_stop)
+    signal.signal(signal.SIGTERM, handle_stop)
+    asyncio.run(main())

@@ -1,3 +1,5 @@
 DROP TABLE IF EXISTS videos;
 
 DROP TABLE IF EXISTS languages;
+
+DROP TABLE IF EXISTS users;

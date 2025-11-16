@@ -7,18 +7,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"time"
-
-	"github.com/ksamf/video-upscaling/backend/internal/storage"
 )
 
-func TranscodeVideo(inputPath string, targetHeight, crf int, fileName string, s3 *storage.Storage, timeout time.Duration) error {
+func Transcode(inputPath, fileName string, targetHeight, crf int, timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+	if _, err := os.Stat(inputPath); os.IsNotExist(err) {
+		return "", fmt.Errorf("input file does not exist: %w", err)
+	}
 
 	tmpOut := filepath.Join(os.TempDir(), fmt.Sprintf("%s_%d.mp4", fileName, targetHeight))
-	defer func() {
-		_ = os.Remove(tmpOut)
-	}()
 
 	args := []string{
 		"-i", inputPath,
@@ -38,19 +36,7 @@ func TranscodeVideo(inputPath string, targetHeight, crf int, fileName string, s3
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg transcode failed: %w", err)
+		return "", fmt.Errorf("ffmpeg transcode failed: %w", err)
 	}
-
-	outFile, err := os.Open(tmpOut)
-	if err != nil {
-		return fmt.Errorf("failed to open transcoded file: %w", err)
-	}
-	defer outFile.Close()
-
-	key := fmt.Sprintf("%s/%d.mp4", fileName, targetHeight)
-	if err := s3.PutObject(key, outFile); err != nil {
-		return fmt.Errorf("s3 upload failed: %w", err)
-	}
-
-	return nil
+	return tmpOut, nil
 }

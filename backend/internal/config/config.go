@@ -10,6 +10,10 @@ type AppConfig struct {
 	Port  int
 	Debug string
 }
+
+type JwtConfig struct {
+	Key string
+}
 type PgConfig struct {
 	Host string
 	Port int
@@ -40,6 +44,7 @@ type KafkaConfig struct {
 }
 type Config struct {
 	App      AppConfig
+	Jwt      JwtConfig
 	Postgres PgConfig
 	Redis    RedisConfig
 	S3       S3Config
@@ -56,6 +61,9 @@ func New() *Config {
 			Host:  getEnv("APP_HOST", "localhost"),
 			Port:  getEnvAsInt("APP_PORT", 8000),
 			Debug: getEnv("APP_DEBUG", "release"),
+		},
+		Jwt: JwtConfig{
+			Key: getEnv("SECRET_KEY", ""),
 		},
 		Postgres: PgConfig{
 			Host: getEnv("DB_HOST", ""),

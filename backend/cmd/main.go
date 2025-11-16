@@ -1,27 +1,28 @@
 package main
 
 import (
-	"log"
-
 	_ "github.com/lib/pq"
 
+	"github.com/ksamf/video-upscaling/backend/internal/auth"
+	"github.com/ksamf/video-upscaling/backend/internal/broker"
+	"github.com/ksamf/video-upscaling/backend/internal/cache"
 	"github.com/ksamf/video-upscaling/backend/internal/config"
 	"github.com/ksamf/video-upscaling/backend/internal/database"
-	broker "github.com/ksamf/video-upscaling/backend/internal/kafka"
-	cache "github.com/ksamf/video-upscaling/backend/internal/redis"
+	"github.com/ksamf/video-upscaling/backend/internal/handler"
+	"github.com/ksamf/video-upscaling/backend/internal/interfaces"
 	"github.com/ksamf/video-upscaling/backend/internal/storage"
-	"github.com/ksamf/video-upscaling/backend/internal/utils"
-	"github.com/redis/go-redis/v9"
 )
 
 type application struct {
-	host   string
-	port   int
-	models database.Models
-	config *config.Config
-	s3     *storage.Storage
-	redis  *redis.Client
-	kafka  *broker.KafkaClients
+	host     string
+	port     int
+	handlers *handler.Handlers
+	auth     interfaces.Auth
+	models   *database.Models
+	config   *config.Config
+	s3       interfaces.ObjectStorage
+	redis    interfaces.Cache
+	kafka    interfaces.MessageBroker
 }
 
 func main() {
@@ -33,30 +34,24 @@ func main() {
 	kafka := broker.New(conf)
 
 	defer pool.Close()
-	defer redis.Close()
 	defer s3.CredContext().Client.CloseIdleConnections()
-	defer func() {
-		if kafka.Writer != nil {
-			kafka.Writer.Close()
-		}
-		if kafka.Reader != nil {
-			kafka.Reader.Close()
-		}
-	}()
 	models := database.NewModel(pool)
 	buckets := storage.NewBucket(s3, conf)
+	handlers := handler.NewHandlers(*models, conf, buckets, redis, kafka)
+	auth := auth.New(&models.Users, conf)
 
 	app := &application{
-		host:   conf.App.Host,
-		port:   conf.App.Port,
-		models: models,
-		config: conf,
-		s3:     buckets,
-		redis:  redis,
-		kafka:  kafka,
+		host:     conf.App.Host,
+		port:     conf.App.Port,
+		handlers: handlers,
+		auth:     auth,
+		models:   models,
+		config:   conf,
+		s3:       buckets,
+		redis:    redis,
+		kafka:    kafka,
 	}
-	log.Println("Kafka worker started and waiting for messages...")
-	go utils.StartVideoWorker(app.kafka.Reader, app.models.Videos, app.s3)
+	go app.StartWorkers()
 	if err := app.serve(); err != nil {
 		panic(err)
 	}

@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     TRANSCRIBE_PATH: str
     TRANSLATE_PATH: str
 
+    KAFKA_HOST: str
+    KAFKA_PORT: int
+
     model_config = SettingsConfigDict(env_file=".env")
 
 

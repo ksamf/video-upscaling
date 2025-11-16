@@ -1,6 +1,6 @@
 __pycache__/
-transcribe/
-translate/
+models/transcribe/
+models/translate/
 .ruff_cache/
 
 .env

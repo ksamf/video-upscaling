@@ -1,6 +1,7 @@
 tmp/
 .air.toml
 Makefile
+internal/tests
 
 .env
 .env.temp

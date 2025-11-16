@@ -7,6 +7,6 @@ uploads/
 .env
 .env.dev
 .vscode/
-tst/
+test_data/
 transcribe/
 translate/

@@ -1,4 +1,4 @@
-include .env
+include .env.dev
 DB_URL=postgres://$(DB_USER):$(DB_PASS)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable
 
 .PHONY: all run create_migration migrate_up migrate_down migrate_force add_all add_air add_migrate

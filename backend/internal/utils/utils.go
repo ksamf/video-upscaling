@@ -20,6 +20,9 @@ func Abs(x int) int {
 	return x
 }
 func LowerStandardRes(base int) []int {
+	if base <= 144 {
+		return []int{144}
+	}
 	var result []int
 	for _, h := range StandardHeights {
 		if h < base {

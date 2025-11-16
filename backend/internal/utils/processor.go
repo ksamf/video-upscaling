@@ -9,21 +9,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ksamf/video-upscaling/backend/internal/database"
-	broker "github.com/ksamf/video-upscaling/backend/internal/kafka"
-	"github.com/ksamf/video-upscaling/backend/internal/rest"
-	"github.com/ksamf/video-upscaling/backend/internal/storage"
+	"github.com/ksamf/video-upscaling/backend/internal/broker"
+	"github.com/ksamf/video-upscaling/backend/internal/interfaces"
 )
 
 var StandardHeights = []int{144, 240, 360, 480, 720, 1080, 1440, 2160, 4320}
 
-func processVideoJob(job broker.VideoJob, db database.VideoModel, s3 *storage.Storage) error {
+func ProcessVideo(job *broker.VideoProcessor, db interfaces.Video, s3 interfaces.ObjectStorage) error {
 	videoIDStr := job.VideoID.String()
 	s3Path := fmt.Sprintf("%s/tmp%s", videoIDStr, job.FileExt)
 	tmpInputPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s_input.%s", videoIDStr, job.FileExt))
 	defer os.Remove(tmpInputPath)
 	defer s3.DeleteObject(s3Path)
-	fmt.Println(s3Path)
 	if err := s3.GetObject(s3Path, tmpInputPath); err != nil {
 		return fmt.Errorf("failed to download from S3: %w", err)
 	}
@@ -35,8 +32,10 @@ func processVideoJob(job broker.VideoJob, db database.VideoModel, s3 *storage.St
 	if !slices.Contains(StandardHeights, height) {
 		height = ClosestStandardHeight(height)
 		crf := 26 - 2*height
-		TranscodeVideo(tmpInputPath, height, crf, videoIDStr, s3, 30*time.Minute)
-
+		tmpInputPath, err = Transcode(tmpInputPath, videoIDStr, height, crf, 30*time.Minute)
+		if err != nil {
+			return fmt.Errorf("failed to transcode to standard height: %w", err)
+		}
 	}
 	origKey := fmt.Sprintf("%s/%d.mp4", videoIDStr, height)
 	origFile, err := os.Open(tmpInputPath)
@@ -75,31 +74,24 @@ func processVideoJob(job broker.VideoJob, db database.VideoModel, s3 *storage.St
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-
-		if err := ExtractAudio(tmpInputPath, videoIDStr, s3); err != nil {
+		tmpAudio, err := ExtractAudio(tmpInputPath, videoIDStr)
+		if err != nil {
 			errCh <- fmt.Errorf("audio extract failed: %w", err)
 		}
-
-		lang, err := rest.CreateSubtitles(job.VideoID, job.BaseURL)
+		f, err := os.Open(tmpAudio)
 		if err != nil {
-			errCh <- fmt.Errorf("create subtitles request failed: %w", err)
-			return
+			errCh <- fmt.Errorf("open extracted audio failed: %w", err)
 		}
-		langId, err := db.GetLanguageId(lang)
-		if langId == 0 || err != nil {
-			errCh <- fmt.Errorf("db get language failed: %w", err)
+		defer f.Close()
+		if err := s3.PutObject(fmt.Sprintf("%s/audio.mp3", videoIDStr), f); err != nil {
+			errCh <- fmt.Errorf("s3 upload failed: %w", err)
 		}
-		if err := db.Insert(&database.Video{
-			VideoId:    job.VideoID,
-			Name:       job.FileName,
-			LanguageId: langId,
-			Quality:    height,
-		}); err != nil {
-			errCh <- fmt.Errorf("db insert failed: %w", err)
-			return
-		}
+		defer os.Remove(tmpAudio)
 	}()
 
+	if err := db.UpdateQuality(job.VideoID, height); err != nil {
+		errCh <- fmt.Errorf("db update quality failed: %w", err)
+	}
 	for i, q := range qualities {
 		crf := 26 - 2*i
 		if crf < 8 {
@@ -112,26 +104,23 @@ func processVideoJob(job broker.VideoJob, db database.VideoModel, s3 *storage.St
 		wg.Add(1)
 		go func(targetHeight, crf int) {
 			defer wg.Done()
-			if err := TranscodeVideo(tmpInputPath, targetHeight, crf, videoIDStr, s3, 30*time.Minute); err != nil {
+			tmpOut, err := Transcode(tmpInputPath, videoIDStr, targetHeight, crf, 30*time.Minute)
+			if err != nil {
 				errCh <- fmt.Errorf("transcode %dp failed: %w", targetHeight, err)
+				return
+			}
+			defer os.Remove(tmpOut)
+			outFile, err := os.Open(tmpOut)
+			if err != nil {
+				errCh <- fmt.Errorf("failed to open transcoded file: %w", err)
+			}
+			defer outFile.Close()
+			key := fmt.Sprintf("%s/%d.mp4", videoIDStr, targetHeight)
+			if err := s3.PutObject(key, outFile); err != nil {
+				errCh <- fmt.Errorf("s3 upload failed: %w", err)
 			}
 		}(q, crf)
 	}
-
-	if height > 1440 {
-		job.Upscale = false
-	}
-	if job.Upscale {
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := rest.Upscale(job.VideoID, job.BaseURL, height, job.RealisticVideo); err != nil {
-				errCh <- fmt.Errorf("upscale failed: %w", err)
-			}
-		}()
-	}
-
 	wg.Wait()
 	close(errCh)
 	<-doneErr

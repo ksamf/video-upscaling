@@ -10,23 +10,16 @@ dependencies = [
     "pydantic-settings>=2.10.1",
     "webvtt-py>=0.5.1",
     "whisperx>=3.4.2",
-    "uvicorn>=0.37.0",
-    "fastapi>=0.118.0",
     "sacremoses>=0.1.1",
     "torch>=2.8.0",
     "nvidia-cudnn-cu11>=9.10.2.21",
     "onnxruntime-gpu>=1.23.0",
+    "confluent-kafka[json,schemaregistry]>=2.12.1",
 ]
 
 [dependency-groups]
 dev = [
     "ruff>=0.13.2",
+    "uvicorn>=0.37.0",
+    "fastapi>=0.118.0",
 ]
-
-[tool.uv.sources]
-torch = {index = "pytorch-cu128"}
-
-[[tool.uv.index]]
-name = "pytorch-cu128"
-url = "https://download.pytorch.org/whl/cu128"
-explicit = true

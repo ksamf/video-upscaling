@@ -9,7 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func New(conf *config.Config) *redis.Client {
+func New(conf *config.Config) *RedisModel {
 	conn := redis.NewClient(&redis.Options{
 		Addr:     conf.Redis.Host + ":" + fmt.Sprintf("%d", conf.Redis.Port),
 		Password: conf.Redis.Pass,
@@ -20,5 +20,5 @@ func New(conf *config.Config) *redis.Client {
 		fmt.Fprintf(os.Stderr, "Unable to connect to redis: %v\n", err)
 		os.Exit(1)
 	}
-	return conn
+	return &RedisModel{conn: conn}
 }

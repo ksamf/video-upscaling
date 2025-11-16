@@ -7,16 +7,15 @@ import (
 	"os/exec"
 	"path/filepath"
 	"time"
-
-	"github.com/ksamf/video-upscaling/backend/internal/storage"
 )
 
-func ExtractAudio(inputPath, fileName string, s3 *storage.Storage) error {
+func ExtractAudio(inputPath, fileName string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-
+	if _, err := os.Stat(inputPath); os.IsNotExist(err) {
+		return "", fmt.Errorf("input file does not exist: %w", err)
+	}
 	tmpAudio := filepath.Join(os.TempDir(), fmt.Sprintf("%s_audio.mp3", fileName))
-	defer func() { _ = os.Remove(tmpAudio) }()
 
 	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-y",
@@ -30,18 +29,7 @@ func ExtractAudio(inputPath, fileName string, s3 *storage.Storage) error {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg audio extract failed: %w", err)
+		return "", fmt.Errorf("ffmpeg audio extract failed: %w", err)
 	}
-
-	f, err := os.Open(tmpAudio)
-	if err != nil {
-		return fmt.Errorf("open extracted audio failed: %w", err)
-	}
-	defer f.Close()
-
-	if err := s3.PutObject(fmt.Sprintf("%s/audio.mp3", fileName), f); err != nil {
-		return fmt.Errorf("s3 upload failed: %w", err)
-	}
-
-	return nil
+	return tmpAudio, nil
 }

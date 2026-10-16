@@ -1,7 +1,0 @@
-__pycache__/
-models/transcribe/
-models/translate/
-.ruff_cache/
-
-.env
-.env.temp

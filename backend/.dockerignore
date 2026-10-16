@@ -1,7 +1,30 @@
-tmp/
-.air.toml
-Makefile
-internal/tests
+# Исключить виртуальные окружения
+.venv/
+env/
+__pycache__/
 
+# Логи и временные файлы
+*.log
+*.tmp
+*.swp
+.ruff_cache/
+
+# Исключить файлы конфигурации IDE
+.vscode/
+.idea/
+
+# Исключить данные и модели
+uploads/
+models/
+
+# Исключить файлы сборки
+dist/
+build/
+*.egg-info/
+
+# Исключить файлы окружения
 .env
-.env.temp
+*.env
+
+# Исключить node_modules, если есть фронтенд
+node_modules/

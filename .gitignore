@@ -1,12 +1,10 @@
-tmp/
 .venv/
 __pycache__/
+*.onnx
 .ruff_cache/
 uploads/
 .python-version
 .env
-.env.dev
 .vscode/
-test_data/
-transcribe/
-translate/
+
+*/node_modules

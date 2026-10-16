@@ -1,0 +1,19 @@
+{
+    "hello": "Hello, world!",
+    "langs": {
+        "ru": "Russian",
+        "en": "English"
+    },
+    "header": {
+        "load": {
+            "trigger": "Upload Video",
+            "load": "Load",
+            "cancle": "Cancle",
+            "delete_file": "Delete file"
+        }
+    },
+    "video_list": {
+        "title": "Video List",
+        "not_found": "No videos found"
+    }
+}
